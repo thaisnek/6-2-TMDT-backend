@@ -98,6 +98,52 @@ CREATE TABLE `Shipments` (`id` BIGINT AUTO_INCREMENT PRIMARY KEY);
 CREATE TABLE `Reviews` (`id` BIGINT AUTO_INCREMENT PRIMARY KEY);
 
 -- ==================== TẠO DỮ LIỆU MẪU ====================
+-- =========================================
+-- INSERT 2 CUSTOMER + 1 ADMIN accounts
+-- Password cho tất cả: 123456
+-- BCrypt hash của "123456":
+-- $2a$10$slYQmyNdGzTn7ZLBXBChFOC9f6kFjAqPhccnP4/loVQDiAnhQpTqm
+-- =========================================
+
+INSERT INTO users (full_name, user_name, email, phone, password_hash, status, role, created_at, updated_at)
+VALUES
+    -- Customer 1
+    (
+        'Nguyen Van A',
+        'customer1',
+        'customer1@gmail.com',
+        '0901234567',
+        '$2a$10$slYQmyNdGzTn7ZLBXBChFOC9f6kFjAqPhccnP4/loVQDiAnhQpTqm',
+        'ACTIVE',
+        'CUSTOMER',
+        NOW(),
+        NOW()
+    ),
+    -- Customer 2
+    (
+        'Tran Thi B',
+        'customer2',
+        'customer2@gmail.com',
+        '0912345678',
+        '$2a$10$slYQmyNdGzTn7ZLBXBChFOC9f6kFjAqPhccnP4/loVQDiAnhQpTqm',
+        'ACTIVE',
+        'CUSTOMER',
+        NOW(),
+        NOW()
+    ),
+    -- Admin
+    (
+        'Admin System',
+        'admin',
+        'admin@webtmdt.com',
+        '0999999999',
+        '$2a$10$slYQmyNdGzTn7ZLBXBChFOC9f6kFjAqPhccnP4/loVQDiAnhQpTqm',
+        'ACTIVE',
+        'ADMIN',
+        NOW(),
+        NOW()
+    );
+
 
 INSERT INTO `Categories` (`name`) VALUES
 ('Đồ chơi trẻ em'), ('Vật dụng cho bé'), ('Đồ chơi giáo dục'), ('Đồ chơi vận động'), ('Đồ dùng mẹ và bé');
