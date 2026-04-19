@@ -32,7 +32,7 @@ Dự án backend cho hệ thống thương mại điện tử, xây dựng bằn
 
 ## 📁 Cấu trúc dự án
 
-
+```bash
 WebTMDT/
 ├── src/
 │   └── main/
@@ -51,7 +51,7 @@ WebTMDT/
 │           └── application.properties
 ├── pom.xml
 └── README.md
-
+```
 
 ---
 
@@ -68,6 +68,7 @@ WebTMDT/
 CREATE DATABASE webtmdt CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 2. Mở file `src/main/resources/application.yaml` và chỉnh sửa thông tin kết nối:
+```bash
 server:
   port: 8080
   servlet:
@@ -81,7 +82,7 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
-
+```
 
 > ⚠️ Thay `username & password` bằng tài khoản MySQL của bạn.
 
