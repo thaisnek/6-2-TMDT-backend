@@ -1,5 +1,8 @@
 package com.example.webtmdt.entity;
 
+import com.example.webtmdt.enums.OrderStatus;
+import com.example.webtmdt.enums.PaymentStatus;
+import com.example.webtmdt.enums.ShipmentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -43,14 +46,17 @@ public class Order {
     @Column(nullable = false)
     private String shippingPhone;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String orderStatus;
+    private OrderStatus orderStatus;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String paymentStatus;
+    private PaymentStatus paymentStatus;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String shippingStatus;
+    private ShipmentStatus shippingStatus;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal subtotal;

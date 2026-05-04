@@ -1,5 +1,6 @@
 package com.example.webtmdt.entity;
 
+import com.example.webtmdt.enums.ShipmentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -28,8 +29,9 @@ public class Shipment {
     @JoinColumn(name = "delivery_staff_id")
     private User deliveryStaff;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String shipmentStatus;
+    private ShipmentStatus shipmentStatus;
 
     private LocalDateTime assignedAt;
 

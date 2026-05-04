@@ -12,4 +12,8 @@ public interface CartService {
     CartResponse updateCartItem(String username, Long itemId, Integer quantity);
 
     CartResponse removeCartItem(String username, Long itemId);
+
+    void clearCart(String username);
+
+    Integer getCartItemCount(String username);
 }

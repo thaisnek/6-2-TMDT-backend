@@ -1,5 +1,7 @@
 package com.example.webtmdt.entity;
 
+import com.example.webtmdt.enums.PaymentMethod;
+import com.example.webtmdt.enums.PaymentStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -25,11 +27,13 @@ public class Payment {
     @JoinColumn(name = "order_id", nullable = false, unique = true)
     private Order order;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String paymentMethod;
+    private PaymentMethod paymentMethod;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String paymentStatus;
+    private PaymentStatus paymentStatus;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;

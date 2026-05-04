@@ -3,27 +3,21 @@ package com.example.webtmdt.service.impl;
 import com.example.webtmdt.dto.request.ProductImageRequest;
 import com.example.webtmdt.dto.request.ProductRequest;
 import com.example.webtmdt.dto.request.ProductVariantRequest;
-import com.example.webtmdt.dto.response.ProductImageResponse;
 import com.example.webtmdt.dto.response.ProductResponse;
-import com.example.webtmdt.dto.response.ProductVariantResponse;
 import com.example.webtmdt.entity.*;
+import com.example.webtmdt.exception.ResourceNotFoundException;
+import com.example.webtmdt.mapper.ProductMapper;
 import com.example.webtmdt.repository.CategoryRepository;
-import com.example.webtmdt.repository.ProductImageRepository;
 import com.example.webtmdt.repository.ProductRepository;
-import com.example.webtmdt.repository.ProductVariantRepository;
 import com.example.webtmdt.repository.SupplierRepository;
 import com.example.webtmdt.service.ProductService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import java.math.BigDecimal;
 
 @Service
 @RequiredArgsConstructor
@@ -32,8 +26,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final SupplierRepository supplierRepository;
-    private final ProductVariantRepository productVariantRepository;
-    private final ProductImageRepository productImageRepository;
+    private final ProductMapper productMapper;
 
     // ==================== CREATE ====================
 
@@ -52,16 +45,14 @@ public class ProductServiceImpl implements ProductService {
         // Set Category
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Không tìm thấy danh mục với id: " + request.getCategoryId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Danh mục", "id", request.getCategoryId()));
             product.setCategory(category);
         }
 
         // Set Supplier
         if (request.getSupplierId() != null) {
             Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Không tìm thấy nhà cung cấp với id: " + request.getSupplierId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Nhà cung cấp", "id", request.getSupplierId()));
             product.setSupplier(supplier);
         }
 
@@ -96,7 +87,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         product = productRepository.save(product);
-        return toProductResponse(product);
+        return productMapper.toResponse(product);
     }
 
     // ==================== READ ====================
@@ -104,24 +95,43 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Không tìm thấy sản phẩm với id: " + id));
-        return toProductResponse(product);
+        Product product = findProductOrThrow(id);
+        return productMapper.toResponse(product);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         return productRepository.findAll(pageable)
-                .map(this::toProductResponse);
+                .map(productMapper::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable) {
         return productRepository.findByCategoryId(categoryId, pageable)
-                .map(this::toProductResponse);
+                .map(productMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getProductsBySupplier(Long supplierId, Pageable pageable) {
+        return productRepository.findBySupplierId(supplierId, pageable)
+                .map(productMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> searchProducts(String keyword, Pageable pageable) {
+        return productRepository.searchByKeyword(keyword, pageable)
+                .map(productMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> filterByPrice(BigDecimal minPrice, BigDecimal maxPrice, Pageable pageable) {
+        return productRepository.findByPriceBetween(minPrice, maxPrice, pageable)
+                .map(productMapper::toResponse);
     }
 
     // ==================== UPDATE ====================
@@ -129,9 +139,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Không tìm thấy sản phẩm với id: " + id));
+        Product product = findProductOrThrow(id);
 
         // Update basic fields
         product.setName(request.getName());
@@ -147,8 +155,7 @@ public class ProductServiceImpl implements ProductService {
         // Update Category
         if (request.getCategoryId() != null) {
             Category category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Không tìm thấy danh mục với id: " + request.getCategoryId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Danh mục", "id", request.getCategoryId()));
             product.setCategory(category);
         } else {
             product.setCategory(null);
@@ -157,8 +164,7 @@ public class ProductServiceImpl implements ProductService {
         // Update Supplier
         if (request.getSupplierId() != null) {
             Supplier supplier = supplierRepository.findById(request.getSupplierId())
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                            "Không tìm thấy nhà cung cấp với id: " + request.getSupplierId()));
+                    .orElseThrow(() -> new ResourceNotFoundException("Nhà cung cấp", "id", request.getSupplierId()));
             product.setSupplier(supplier);
         } else {
             product.setSupplier(null);
@@ -194,7 +200,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         product = productRepository.save(product);
-        return toProductResponse(product);
+        return productMapper.toResponse(product);
     }
 
     // ==================== DELETE ====================
@@ -202,56 +208,14 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Không tìm thấy sản phẩm với id: " + id));
+        Product product = findProductOrThrow(id);
         productRepository.delete(product);
     }
 
-    // ==================== MAPPER ====================
+    // ==================== HELPER ====================
 
-    private ProductResponse toProductResponse(Product product) {
-        List<ProductVariantResponse> variantResponses = new ArrayList<>();
-        if (product.getVariants() != null) {
-            variantResponses = product.getVariants().stream()
-                    .map(v -> ProductVariantResponse.builder()
-                            .id(v.getId())
-                            .color(v.getColor())
-                            .size(v.getSize())
-                            .priceOverride(v.getPriceOverride())
-                            .stockQuantity(v.getStockQuantity())
-                            .active(v.getActive())
-                            .build())
-                    .collect(Collectors.toList());
-        }
-
-        List<ProductImageResponse> imageResponses = new ArrayList<>();
-        if (product.getImages() != null) {
-            imageResponses = product.getImages().stream()
-                    .map(i -> ProductImageResponse.builder()
-                            .id(i.getId())
-                            .imageUrl(i.getImageUrl())
-                            .thumbnail(i.getThumbnail())
-                            .build())
-                    .collect(Collectors.toList());
-        }
-
-        return ProductResponse.builder()
-                .id(product.getId())
-                .name(product.getName())
-                .description(product.getDescription())
-                .brand(product.getBrand())
-                .material(product.getMaterial())
-                .basePrice(product.getBasePrice())
-                .status(product.getStatus())
-                .categoryId(product.getCategory() != null ? product.getCategory().getId() : null)
-                .categoryName(product.getCategory() != null ? product.getCategory().getName() : null)
-                .supplierId(product.getSupplier() != null ? product.getSupplier().getId() : null)
-                .supplierName(product.getSupplier() != null ? product.getSupplier().getName() : null)
-                .variants(variantResponses)
-                .images(imageResponses)
-                .createdAt(product.getCreatedAt())
-                .updatedAt(product.getUpdatedAt())
-                .build();
+    private Product findProductOrThrow(Long id) {
+        return productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Sản phẩm", "id", id));
     }
 }

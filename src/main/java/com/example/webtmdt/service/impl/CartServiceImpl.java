@@ -7,6 +7,8 @@ import com.example.webtmdt.entity.Cart;
 import com.example.webtmdt.entity.CartItem;
 import com.example.webtmdt.entity.ProductVariant;
 import com.example.webtmdt.entity.User;
+import com.example.webtmdt.exception.AppException;
+import com.example.webtmdt.exception.ResourceNotFoundException;
 import com.example.webtmdt.repository.CartItemRepository;
 import com.example.webtmdt.repository.CartRepository;
 import com.example.webtmdt.repository.ProductImageRepository;
@@ -17,7 +19,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -32,35 +33,55 @@ public class CartServiceImpl implements CartService {
     private final UserRepository userRepository;
     private final ProductVariantRepository productVariantRepository;
     private final ProductImageRepository productImageRepository;
+    private final com.example.webtmdt.mapper.CartMapper cartMapper;
+
+    // ==================== READ ====================
 
     @Override
     @Transactional(readOnly = true)
     public CartResponse getCart(String username) {
-        User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
+        User user = findUserOrThrow(username);
 
         Cart cart = cartRepository.findByCustomerId(user.getId()).orElse(null);
         if (cart == null) {
             return CartResponse.builder()
                     .customerId(user.getId())
                     .items(List.of())
+                    .itemCount(0)
+                    .totalAmount(BigDecimal.ZERO)
                     .build();
         }
 
-        return mapToCartResponse(cart);
+        return toCartResponse(cart);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer getCartItemCount(String username) {
+        User user = findUserOrThrow(username);
+
+        Cart cart = cartRepository.findByCustomerId(user.getId()).orElse(null);
+        if (cart == null) {
+            return 0;
+        }
+
+        return cart.getItems().stream()
+                .mapToInt(CartItem::getQuantity)
+                .sum();
+    }
+
+    // ==================== ADD TO CART ====================
 
     @Override
     @Transactional
     public CartResponse addToCart(String username, AddToCartRequest request) {
-        User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy người dùng"));
+        User user = findUserOrThrow(username);
 
         ProductVariant variant = productVariantRepository.findById(request.getVariantId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy phân loại sản phẩm"));
+                .orElseThrow(() -> new ResourceNotFoundException("Phân loại sản phẩm", "id", request.getVariantId()));
 
         if (!Boolean.TRUE.equals(variant.getActive())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sản phẩm này đã ngừng kinh doanh");
+            throw new AppException(HttpStatus.BAD_REQUEST, "Sản phẩm này đã ngừng kinh doanh");
         }
 
         Cart cart = cartRepository.findByCustomerId(user.getId())
@@ -79,7 +100,7 @@ public class CartServiceImpl implements CartService {
 
         // Soft check số lượng tồn kho
         if (newQuantity > variant.getStockQuantity()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+            throw new AppException(HttpStatus.BAD_REQUEST,
                     "Không đủ hàng trong kho. Số lượng hiện có: " + variant.getStockQuantity());
         }
 
@@ -95,24 +116,25 @@ public class CartServiceImpl implements CartService {
         }
 
         cartItemRepository.save(cartItem);
-        
-        return mapToCartResponse(cart);
+
+        return toCartResponse(cart);
     }
+
+    // ==================== UPDATE ====================
 
     @Override
     @Transactional
     public CartResponse updateCartItem(String username, Long itemId, Integer quantity) {
-        User user = userRepository.findByUserName(username)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Người dùng không hợp lệ"));
+        User user = findUserOrThrow(username);
 
         Cart cart = cartRepository.findByCustomerId(user.getId())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Giỏ hàng trống"));
+                .orElseThrow(() -> new ResourceNotFoundException("Giỏ hàng", "customerId", user.getId()));
 
         CartItem cartItem = cartItemRepository.findById(itemId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy mục trong giỏ"));
+                .orElseThrow(() -> new ResourceNotFoundException("Mục trong giỏ", "id", itemId));
 
         if (!cartItem.getCart().getId().equals(cart.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Không có quyền sửa giỏ hàng này");
+            throw new AppException(HttpStatus.FORBIDDEN, "Không có quyền sửa giỏ hàng này");
         }
 
         if (quantity <= 0) {
@@ -121,15 +143,17 @@ public class CartServiceImpl implements CartService {
         } else {
             // Soft check tồn kho
             if (quantity > cartItem.getVariant().getStockQuantity()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                throw new AppException(HttpStatus.BAD_REQUEST,
                         "Không đủ hàng trong kho. Số lượng hiện có: " + cartItem.getVariant().getStockQuantity());
             }
             cartItem.setQuantity(quantity);
             cartItemRepository.save(cartItem);
         }
 
-        return mapToCartResponse(cart);
+        return toCartResponse(cart);
     }
+
+    // ==================== DELETE ====================
 
     @Override
     @Transactional
@@ -137,36 +161,61 @@ public class CartServiceImpl implements CartService {
         return updateCartItem(username, itemId, 0);
     }
 
-    private CartResponse mapToCartResponse(Cart cart) {
+    @Override
+    @Transactional
+    public void clearCart(String username) {
+        User user = findUserOrThrow(username);
+
+        Cart cart = cartRepository.findByCustomerId(user.getId()).orElse(null);
+        if (cart != null) {
+            cart.getItems().clear();
+            cartRepository.save(cart);
+        }
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    private User findUserOrThrow(String username) {
+        return userRepository.findByUserName(username)
+                .orElseThrow(() -> new ResourceNotFoundException("Người dùng", "username", username));
+    }
+
+    private CartResponse toCartResponse(Cart cart) {
+        CartResponse response = cartMapper.toResponse(cart);
+
         List<CartItemResponse> itemResponses = cart.getItems().stream()
                 .map(item -> {
+                    CartItemResponse itemResponse = cartMapper.toItemResponse(item);
+
                     ProductVariant variant = item.getVariant();
-                    BigDecimal price = variant.getPriceOverride() != null 
-                            ? variant.getPriceOverride() 
+                    BigDecimal price = variant.getPriceOverride() != null
+                            ? variant.getPriceOverride()
                             : variant.getProduct().getBasePrice();
 
                     String imageUrl = productImageRepository.findByProductIdAndThumbnailTrue(variant.getProduct().getId())
                             .map(img -> img.getImageUrl())
                             .orElse(null);
 
-                    return CartItemResponse.builder()
-                            .id(item.getId())
-                            .variantId(variant.getId())
-                            .productId(variant.getProduct().getId())
-                            .productName(variant.getProduct().getName())
-                            .color(variant.getColor())
-                            .size(variant.getSize())
-                            .imageUrl(imageUrl)
-                            .unitPrice(price)
-                            .quantity(item.getQuantity())
-                            .build();
+                    itemResponse.setUnitPrice(price);
+                    itemResponse.setImageUrl(imageUrl);
+                    return itemResponse;
                 })
                 .collect(Collectors.toList());
 
-        return CartResponse.builder()
-                .id(cart.getId())
-                .customerId(cart.getCustomer().getId())
-                .items(itemResponses)
-                .build();
+        response.setItems(itemResponses);
+
+        // Tính tổng tiền
+        BigDecimal totalAmount = itemResponses.stream()
+                .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        response.setTotalAmount(totalAmount);
+
+        // Tổng số lượng items
+        int itemCount = itemResponses.stream()
+                .mapToInt(CartItemResponse::getQuantity)
+                .sum();
+        response.setItemCount(itemCount);
+
+        return response;
     }
 }

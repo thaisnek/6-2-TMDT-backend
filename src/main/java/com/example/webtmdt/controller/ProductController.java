@@ -10,9 +10,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+
+import java.math.BigDecimal;
 
 @RestController
 @RequestMapping("/api/products")
@@ -42,6 +45,37 @@ public class ProductController {
     }
 
     /**
+     * Tìm kiếm sản phẩm theo keyword
+     * GET /api/products/search?keyword=áo&page=0&size=10
+     */
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> searchProducts(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ProductResponse> products = productService.searchProducts(keyword, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Tìm kiếm sản phẩm thành công!", products));
+    }
+
+    /**
+     * Lọc sản phẩm theo khoảng giá
+     * GET /api/products/filter?minPrice=100000&maxPrice=500000
+     */
+    @GetMapping("/filter")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> filterByPrice(
+            @RequestParam BigDecimal minPrice,
+            @RequestParam BigDecimal maxPrice,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("basePrice").ascending());
+        Page<ProductResponse> products = productService.filterByPrice(minPrice, maxPrice, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lọc sản phẩm theo giá thành công!", products));
+    }
+
+    /**
      * Lấy sản phẩm theo danh mục
      * GET /api/products/category/{categoryId}
      */
@@ -52,9 +86,23 @@ public class ProductController {
             @RequestParam(defaultValue = "10") int size
     ) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-
         Page<ProductResponse> products = productService.getProductsByCategory(categoryId, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy sản phẩm theo danh mục thành công!", products));
+    }
+
+    /**
+     * Lấy sản phẩm theo nhà cung cấp
+     * GET /api/products/supplier/{supplierId}
+     */
+    @GetMapping("/supplier/{supplierId}")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getProductsBySupplier(
+            @PathVariable Long supplierId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ProductResponse> products = productService.getProductsBySupplier(supplierId, pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lấy sản phẩm theo nhà cung cấp thành công!", products));
     }
 
     /**
@@ -75,9 +123,12 @@ public class ProductController {
      */
     @PostMapping
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<ApiResponse<ProductResponse>> createProduct(@Valid @RequestBody ProductRequest request) {
+    public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
+            @Valid @RequestBody ProductRequest request) {
         ProductResponse product = productService.createProduct(request);
-        return ResponseEntity.ok(ApiResponse.success("Tạo sản phẩm thành công!", product));
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Tạo sản phẩm thành công!", product));
     }
 
     /**
