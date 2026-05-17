@@ -24,12 +24,13 @@ public class SupplierController {
 
     private final SupplierService supplierService;
 
-    // ==================== PUBLIC ENDPOINTS ====================
+    // ==================== ADMIN ENDPOINTS ====================
 
     /**
      * Lấy danh sách nhà cung cấp (có phân trang)
      */
     @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<SupplierResponse>>> getAllSuppliers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
@@ -46,6 +47,7 @@ public class SupplierController {
      * Lấy danh sách tất cả nhà cung cấp (không phân trang, dùng cho dropdown)
      */
     @GetMapping("/all")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<SupplierResponse>>> getAllSuppliersList() {
         List<SupplierResponse> suppliers = supplierService.getAllSuppliersList();
         return ResponseEntity.ok(ApiResponse.success("Lấy danh sách nhà cung cấp thành công!", suppliers));
@@ -55,6 +57,7 @@ public class SupplierController {
      * Lấy chi tiết nhà cung cấp
      */
     @GetMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<SupplierResponse>> getSupplierById(@PathVariable Long id) {
         SupplierResponse supplier = supplierService.getSupplierById(id);
         return ResponseEntity.ok(ApiResponse.success("Lấy chi tiết nhà cung cấp thành công!", supplier));

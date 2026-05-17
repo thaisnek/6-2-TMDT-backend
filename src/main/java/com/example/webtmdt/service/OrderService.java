@@ -17,6 +17,8 @@ public interface OrderService {
 
     OrderResponse cancelOrder(String username, Long orderId, String reason);
 
+    OrderResponse completeOrder(String username, Long orderId);
+
     // ===== Admin =====
     Page<OrderResponse> getAllOrders(Pageable pageable);
 

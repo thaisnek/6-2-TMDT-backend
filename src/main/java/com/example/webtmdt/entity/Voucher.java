@@ -36,6 +36,11 @@ public class Voucher {
     @Column(nullable = false)
     private Integer quantity;
 
+    /** Số lượng mã đã được sử dụng */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer usedQuantity = 0;
+
     @Column(nullable = false, unique = true)
     private String codeVoucher;
 

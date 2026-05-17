@@ -101,7 +101,6 @@ public class VoucherServiceImpl implements VoucherService {
     public List<VoucherResponse> getAvailableVouchers() {
         List<Voucher> vouchers = voucherRepository.findAvailableVouchers(LocalDateTime.now());
         return vouchers.stream()
-                .filter(v -> voucherUsedRepository.countByVoucherId(v.getId()) < v.getQuantity())
                 .map(this::toVoucherResponse)
                 .collect(Collectors.toList());
     }
@@ -119,8 +118,7 @@ public class VoucherServiceImpl implements VoucherService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Voucher đã hết hạn!");
         }
 
-        long usedCount = voucherUsedRepository.countByVoucherId(voucher.getId());
-        if (usedCount >= voucher.getQuantity()) {
+        if (voucher.getUsedQuantity() >= voucher.getQuantity()) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Voucher đã hết lượt sử dụng!");
         }
 
@@ -156,7 +154,7 @@ public class VoucherServiceImpl implements VoucherService {
 
     private VoucherResponse toVoucherResponse(Voucher voucher) {
         VoucherResponse response = voucherMapper.toResponse(voucher);
-        response.setUsedCount(voucherUsedRepository.countByVoucherId(voucher.getId()));
+        response.setUsedCount(voucher.getUsedQuantity().longValue());
         return response;
     }
 }

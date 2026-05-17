@@ -9,8 +9,8 @@ import lombok.Setter;
 @Setter
 public class SendMessageRequest {
 
-    @NotNull(message = "ID người nhận không được để trống")
-    private Long receiverId;
+    @NotBlank(message = "Username người nhận không được để trống")
+    private String receiverUsername;
 
     @NotBlank(message = "Nội dung tin nhắn không được để trống")
     private String content;

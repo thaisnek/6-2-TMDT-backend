@@ -33,9 +33,12 @@ public class SupplierServiceImpl implements SupplierService {
 
         Supplier supplier = Supplier.builder()
                 .name(request.getName())
+                .contactPerson(request.getContactPerson())
                 .email(request.getContactEmail())
                 .phone(request.getContactPhone())
                 .address(request.getAddress())
+                .contractInfo(request.getContractInfo())
+                .active(request.getActive() != null ? request.getActive() : true)
                 .build();
 
         supplier = supplierRepository.save(supplier);
@@ -72,9 +75,14 @@ public class SupplierServiceImpl implements SupplierService {
         }
 
         supplier.setName(request.getName());
+        supplier.setContactPerson(request.getContactPerson());
         supplier.setEmail(request.getContactEmail());
         supplier.setPhone(request.getContactPhone());
         supplier.setAddress(request.getAddress());
+        supplier.setContractInfo(request.getContractInfo());
+        if (request.getActive() != null) {
+            supplier.setActive(request.getActive());
+        }
 
         supplier = supplierRepository.save(supplier);
         return supplierMapper.toResponse(supplier);

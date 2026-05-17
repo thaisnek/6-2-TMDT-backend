@@ -40,6 +40,7 @@ public class Conversation {
     // ========== RELATIONSHIPS ==========
 
     @OneToMany(mappedBy = "conversation", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt ASC")
     @Builder.Default
     private List<Message> messages = new ArrayList<>();
 }

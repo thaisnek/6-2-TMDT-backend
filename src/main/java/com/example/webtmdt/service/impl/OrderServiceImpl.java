@@ -43,6 +43,8 @@ public class OrderServiceImpl implements OrderService {
     private final VoucherUsedRepository voucherUsedRepository;
     private final PaymentRepository paymentRepository;
     private final ShipmentRepository shipmentRepository;
+    private final CartRepository cartRepository;
+    private final CartItemRepository cartItemRepository;
     private final OrderMapper orderMapper;
     private final VoucherService voucherService;
     private final PaymentService paymentService;
@@ -128,6 +130,12 @@ public class OrderServiceImpl implements OrderService {
             order.setVoucher(voucher);
             order.setDiscountAmount(discountAmount);
 
+            // Trừ số lượng voucher (chống Race Condition)
+            int updatedVoucher = voucherRepository.incrementUsedQuantity(voucher.getId());
+            if (updatedVoucher == 0) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Voucher đã hết lượt sử dụng ngay trước khi bạn đặt hàng!");
+            }
+
             // Ghi nhận voucher đã dùng
             VoucherUsed voucherUsed = VoucherUsed.builder()
                     .user(user)
@@ -164,6 +172,14 @@ public class OrderServiceImpl implements OrderService {
         if (request.getPaymentMethod() == PaymentMethod.MOMO) {
             momoPayUrl = paymentService.createMomoPayment(order);
         }
+
+        // 10. Dọn dẹp giỏ hàng (Xóa những sản phẩm đã đặt khỏi giỏ)
+        List<Long> orderedVariantIds = request.getItems().stream()
+                .map(OrderItemRequest::getVariantId)
+                .collect(Collectors.toList());
+        cartRepository.findByCustomerId(user.getId()).ifPresent(cart -> {
+            cartItemRepository.deleteByCartIdAndVariantIdIn(cart.getId(), orderedVariantIds);
+        });
 
         OrderResponse response = toOrderResponse(order);
         response.setMomoPayUrl(momoPayUrl);
@@ -222,6 +238,30 @@ public class OrderServiceImpl implements OrderService {
         order.setCancelReason(reason);
         order.setPaymentStatus(PaymentStatus.REFUNDED);
         order.setShippingStatus(ShipmentStatus.FAILED);
+
+        order = orderRepository.save(order);
+        return toOrderResponse(order);
+    }
+
+    // ==================== COMPLETE ====================
+
+    @Override
+    @Transactional
+    public OrderResponse completeOrder(String username, Long orderId) {
+        User user = findUserOrThrow(username);
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Đơn hàng", "id", orderId));
+
+        if (!order.getCustomer().getId().equals(user.getId())) {
+            throw new AppException(HttpStatus.FORBIDDEN, "Không có quyền thực hiện trên đơn hàng này");
+        }
+
+        if (order.getOrderStatus() != OrderStatus.DELIVERED) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ có thể bấm Đã nhận được hàng khi đơn hàng ở trạng thái Đã giao (DELIVERED)");
+        }
+
+        order.setOrderStatus(OrderStatus.COMPLETED);
+        loyaltyService.earnPoints(user, order);
 
         order = orderRepository.save(order);
         return toOrderResponse(order);
@@ -306,6 +346,12 @@ public class OrderServiceImpl implements OrderService {
                 .collect(Collectors.toList());
 
         response.setItems(itemResponses);
+
+        // Map paymentMethod từ bảng Payment
+        paymentRepository.findByOrderId(order.getId()).ifPresent(payment ->
+                response.setPaymentMethod(payment.getPaymentMethod().name())
+        );
+
         return response;
     }
 }

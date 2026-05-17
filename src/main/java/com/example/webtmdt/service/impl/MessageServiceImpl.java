@@ -36,8 +36,8 @@ public class MessageServiceImpl implements MessageService {
     @Transactional
     public MessageResponse sendMessage(String username, SendMessageRequest request) {
         User sender = findUserOrThrow(username);
-        User receiver = userRepository.findById(request.getReceiverId())
-                .orElseThrow(() -> new ResourceNotFoundException("Người nhận", "id", request.getReceiverId()));
+        User receiver = userRepository.findByUserName(request.getReceiverUsername())
+                .orElseThrow(() -> new ResourceNotFoundException("Người nhận", "username", request.getReceiverUsername()));
 
         if (sender.getId().equals(receiver.getId())) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Không thể gửi tin nhắn cho chính mình");
@@ -72,8 +72,9 @@ public class MessageServiceImpl implements MessageService {
         Conversation conversation = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Cuộc trò chuyện", "id", conversationId));
 
-        // Check quyền truy cập
-        if (!conversation.getUserOne().getId().equals(user.getId())
+        // Check quyền truy cập: Admin và Sales được phép xem mọi cuộc trò chuyện
+        boolean isStaff = user.getRole().name().equals("ADMIN") || user.getRole().name().equals("SALES_STAFF");
+        if (!isStaff && !conversation.getUserOne().getId().equals(user.getId())
                 && !conversation.getUserTwo().getId().equals(user.getId())) {
             throw new AppException(HttpStatus.FORBIDDEN, "Không có quyền xem cuộc trò chuyện này");
         }
@@ -87,11 +88,23 @@ public class MessageServiceImpl implements MessageService {
     public List<ConversationResponse> getMyConversations(String username) {
         User user = findUserOrThrow(username);
 
-        return conversationRepository.findByUserId(user.getId()).stream()
+        // Admin và Sales được xem toàn bộ Conversation của hệ thống
+        boolean isStaff = user.getRole().name().equals("ADMIN") || user.getRole().name().equals("SALES_STAFF");
+        List<Conversation> conversations = isStaff 
+                ? conversationRepository.findAll() 
+                : conversationRepository.findByUserId(user.getId());
+
+        return conversations.stream()
                 .map(conv -> {
                     User otherUser = conv.getUserOne().getId().equals(user.getId())
                             ? conv.getUserTwo()
                             : conv.getUserOne();
+
+                    // Nếu Staff đang xem cuộc hội thoại của khách (mà Staff không phải userOne/userTwo)
+                    // thì mặc định hiển thị tên của người bắt đầu cuộc trò chuyện (thường là khách hàng)
+                    if (isStaff && !conv.getUserOne().getId().equals(user.getId()) && !conv.getUserTwo().getId().equals(user.getId())) {
+                        otherUser = conv.getUserOne();
+                    }
 
                     // Lấy tin nhắn cuối
                     String lastMsg = null;

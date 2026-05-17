@@ -73,10 +73,13 @@ public class AddressServiceImpl implements AddressService {
             clearDefaultAddress(user.getId());
             address.setIsDefault(true);
         } else if (Boolean.FALSE.equals(request.getIsDefault()) && Boolean.TRUE.equals(address.getIsDefault())) {
-            // KHÔNG cho phép bỏ default nếu nó đang là default. Phải set cái khác thành default.
-            // Trừ khi đây là địa chỉ duy nhất.
-            // Tạm thời bỏ qua logic phức tạp, cứ gán theo request.
             address.setIsDefault(false);
+            // Tự động set 1 địa chỉ khác làm mặc định (nếu có)
+            addressRepository.findFirstByUserIdAndIdNotOrderByCreatedAtDesc(user.getId(), addressId)
+                    .ifPresent(fallback -> {
+                        fallback.setIsDefault(true);
+                        addressRepository.save(fallback);
+                    });
         }
 
         address.setShipName(request.getFullName());
@@ -92,10 +95,18 @@ public class AddressServiceImpl implements AddressService {
     public void deleteAddress(String username, Long addressId) {
         User user = findUserOrThrow(username);
         AddressUser address = findAddressOrThrow(addressId, user.getId());
+        
+        boolean wasDefault = address.getIsDefault();
         addressRepository.delete(address);
         
-        // Nếu xóa địa chỉ mặc định, có thể cần set địa chỉ khác làm mặc định (nếu còn).
-        // Để đơn giản, hiện tại sẽ không tự set.
+        if (wasDefault) {
+            // Nếu xóa địa chỉ mặc định, tự động set địa chỉ khác làm mặc định
+            addressRepository.findFirstByUserIdAndIdNotOrderByCreatedAtDesc(user.getId(), addressId)
+                    .ifPresent(fallback -> {
+                        fallback.setIsDefault(true);
+                        addressRepository.save(fallback);
+                    });
+        }
     }
 
     @Override
@@ -126,12 +137,6 @@ public class AddressServiceImpl implements AddressService {
     }
 
     private void clearDefaultAddress(Long userId) {
-        List<AddressUser> addresses = addressRepository.findByUserId(userId);
-        for (AddressUser addr : addresses) {
-            if (Boolean.TRUE.equals(addr.getIsDefault())) {
-                addr.setIsDefault(false);
-                addressRepository.save(addr);
-            }
-        }
+        addressRepository.clearDefaultByUserId(userId);
     }
 }

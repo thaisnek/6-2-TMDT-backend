@@ -66,6 +66,15 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Hủy đơn hàng thành công!", order));
     }
 
+    @PutMapping("/api/orders/{id}/complete")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<ApiResponse<OrderResponse>> completeOrder(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @PathVariable Long id) {
+        OrderResponse order = orderService.completeOrder(userDetails.getUsername(), id);
+        return ResponseEntity.ok(ApiResponse.success("Đã xác nhận nhận hàng thành công!", order));
+    }
+
     // ==================== ADMIN ENDPOINTS ====================
 
     @GetMapping("/api/admin/orders")

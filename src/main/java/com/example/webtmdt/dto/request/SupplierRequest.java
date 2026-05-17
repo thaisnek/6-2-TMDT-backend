@@ -12,10 +12,16 @@ public class SupplierRequest {
     @NotBlank(message = "Tên nhà cung cấp không được để trống")
     private String name;
 
+    private String contactPerson;
+
     @Email(message = "Email liên hệ không hợp lệ")
     private String contactEmail;
 
     private String contactPhone;
 
     private String address;
+
+    private String contractInfo;
+
+    private Boolean active = true;
 }
