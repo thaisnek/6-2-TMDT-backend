@@ -128,6 +128,10 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Mật khẩu cũ không đúng!");
         }
 
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Mật khẩu xác nhận không khớp!");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
     }

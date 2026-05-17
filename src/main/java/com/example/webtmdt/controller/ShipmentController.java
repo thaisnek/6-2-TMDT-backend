@@ -24,10 +24,10 @@ public class ShipmentController {
     private final ShipmentService shipmentService;
 
     /**
-     * Admin: Phân công nhân viên giao hàng
+     * Admin/Sales: Phân công nhân viên giao hàng
      */
     @PutMapping("/api/admin/shipments/{orderId}/assign")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_STAFF')")
     public ResponseEntity<ApiResponse<ShipmentResponse>> assignDeliveryStaff(
             @PathVariable Long orderId,
             @Valid @RequestBody AssignShipmentRequest request) {
@@ -36,10 +36,10 @@ public class ShipmentController {
     }
 
     /**
-     * Admin/Shipper: Cập nhật trạng thái vận chuyển
+     * Admin/Sales/Shipper: Cập nhật trạng thái vận chuyển
      */
     @PutMapping("/api/shipments/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DELIVERY_STAFF')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_STAFF', 'DELIVERY_STAFF')")
     public ResponseEntity<ApiResponse<ShipmentResponse>> updateShipmentStatus(
             @PathVariable Long id,
             @RequestParam ShipmentStatus status) {
