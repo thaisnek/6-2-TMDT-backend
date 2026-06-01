@@ -57,7 +57,7 @@ public class Voucher {
     @Builder.Default
     private List<VoucherUsed> voucherUseds = new ArrayList<>();
 
-    @OneToMany(mappedBy = "voucher", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "voucher")
     @Builder.Default
     private List<Order> orders = new ArrayList<>();
 }

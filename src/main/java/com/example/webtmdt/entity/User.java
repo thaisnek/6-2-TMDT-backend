@@ -74,11 +74,11 @@ public class User {
     @Builder.Default
     private List<Message> messages = new ArrayList<>();
 
-    @OneToMany(mappedBy = "userOne", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "userOne")
     @Builder.Default
     private List<Conversation> conversationsAsUserOne = new ArrayList<>();
 
-    @OneToMany(mappedBy = "userTwo", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "userTwo")
     @Builder.Default
     private List<Conversation> conversationsAsUserTwo = new ArrayList<>();
 
@@ -86,15 +86,15 @@ public class User {
     @Builder.Default
     private List<Cart> carts = new ArrayList<>();
 
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "customer")
     @Builder.Default
     private List<Order> orders = new ArrayList<>();
 
-    @OneToMany(mappedBy = "deliveryStaff", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "deliveryStaff")
     @Builder.Default
     private List<Shipment> shipments = new ArrayList<>();
 
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "customer")
     @Builder.Default
     private List<Review> reviews = new ArrayList<>();
 }

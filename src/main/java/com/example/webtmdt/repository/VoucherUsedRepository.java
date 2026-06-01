@@ -10,4 +10,6 @@ public interface VoucherUsedRepository extends JpaRepository<VoucherUsed, Long> 
     boolean existsByUserIdAndVoucherId(Long userId, Long voucherId);
 
     long countByVoucherId(Long voucherId);
+
+    void deleteByUserIdAndVoucherId(Long userId, Long voucherId);
 }

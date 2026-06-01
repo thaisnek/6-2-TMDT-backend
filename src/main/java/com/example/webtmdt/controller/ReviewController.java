@@ -59,6 +59,16 @@ public class ReviewController {
 
     // ==================== ADMIN ====================
 
+    @GetMapping("/api/admin/reviews")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<Page<ReviewResponse>>> getAllReviews(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ReviewResponse> reviews = reviewService.getAllReviews(pageable);
+        return ResponseEntity.ok(ApiResponse.success("Lay tat ca danh gia thanh cong!", reviews));
+    }
+
     @GetMapping("/api/admin/reviews/product/{productId}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Page<ReviewResponse>>> getAllProductReviews(

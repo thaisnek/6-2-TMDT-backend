@@ -34,9 +34,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/uploads/products/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**", "/api/suppliers/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/reviews/product/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/vouchers/available").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/payments/momo/callback").permitAll()
                         .anyRequest().authenticated()
                 );

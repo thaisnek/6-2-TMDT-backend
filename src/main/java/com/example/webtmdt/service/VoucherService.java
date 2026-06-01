@@ -23,8 +23,7 @@ public interface VoucherService {
 
     void deleteVoucher(Long id);
 
-    // ===== Customer =====
-    List<VoucherResponse> getAvailableVouchers();
+    // ===== Internal =====
 
     /**
      * Validate voucher và trả về discountAmount.

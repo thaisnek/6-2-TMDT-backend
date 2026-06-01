@@ -82,6 +82,13 @@ public class ReviewServiceImpl implements ReviewService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ReviewResponse> getAllReviews(Pageable pageable) {
+        return reviewRepository.findAll(pageable)
+                .map(reviewMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ReviewResponse> getMyReviews(String username) {
         User user = findUserOrThrow(username);
         return reviewMapper.toResponseList(reviewRepository.findByCustomerId(user.getId()));

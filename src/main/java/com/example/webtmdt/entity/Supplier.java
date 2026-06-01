@@ -49,7 +49,7 @@ public class Supplier {
 
     // ========== RELATIONSHIPS ==========
 
-    @OneToMany(mappedBy = "supplier", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "supplier")
     @Builder.Default
     private List<Product> products = new ArrayList<>();
 }

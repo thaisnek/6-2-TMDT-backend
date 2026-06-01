@@ -4,6 +4,8 @@ import com.example.webtmdt.dto.request.UpdateUserRoleRequest;
 import com.example.webtmdt.dto.request.UpdateUserStatusRequest;
 import com.example.webtmdt.dto.response.UserResponse;
 import com.example.webtmdt.entity.User;
+import com.example.webtmdt.enums.UserRole;
+import com.example.webtmdt.enums.UserStatus;
 import com.example.webtmdt.exception.AppException;
 import com.example.webtmdt.exception.ResourceNotFoundException;
 import com.example.webtmdt.mapper.UserMapper;
@@ -15,6 +17,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +32,12 @@ public class UserServiceImpl implements UserService {
     public Page<UserResponse> getAllUsers(Pageable pageable) {
         return userRepository.findAll(pageable)
                 .map(userMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> getActiveDeliveryStaff() {
+        return userMapper.toResponseList(userRepository.findByRoleAndStatus(UserRole.DELIVERY_STAFF, UserStatus.ACTIVE));
     }
 
     @Override

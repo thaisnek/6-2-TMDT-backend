@@ -52,11 +52,11 @@ public class ProductVariant {
 
     // ========== RELATIONSHIPS ==========
 
-    @OneToMany(mappedBy = "variant", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "variant")
     @Builder.Default
     private List<CartItem> cartItems = new ArrayList<>();
 
-    @OneToMany(mappedBy = "variant", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "variant")
     @Builder.Default
     private List<OrderItem> orderItems = new ArrayList<>();
 }

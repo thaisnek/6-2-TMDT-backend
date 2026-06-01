@@ -15,6 +15,8 @@ public interface ProductService {
 
     Page<ProductResponse> getAllProducts(Pageable pageable);
 
+    Page<ProductResponse> getProductsForAdmin(String keyword, Long categoryId, String status, Pageable pageable);
+
     Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable);
 
     Page<ProductResponse> getProductsBySupplier(Long supplierId, Pageable pageable);

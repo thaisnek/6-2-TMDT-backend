@@ -13,6 +13,7 @@ public class OrderItemResponse {
 
     private Long id;
     private Long variantId;
+    private Long productId;
     private String productNameSnapshot;
     private String colorSnapshot;
     private String sizeSnapshot;

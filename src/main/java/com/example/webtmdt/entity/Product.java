@@ -64,7 +64,7 @@ public class Product {
     @Builder.Default
     private List<ProductImage> images = new ArrayList<>();
 
-    @OneToMany(mappedBy = "product", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "product")
     @Builder.Default
     private List<Review> reviews = new ArrayList<>();
 }

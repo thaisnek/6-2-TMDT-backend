@@ -8,7 +8,10 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "voucher_useds")
+@Table(
+        name = "voucher_useds",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "voucher_id"})
+)
 @Getter
 @Setter
 @NoArgsConstructor

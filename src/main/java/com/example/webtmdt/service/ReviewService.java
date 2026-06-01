@@ -17,6 +17,8 @@ public interface ReviewService {
     /** Lấy tất cả review của sản phẩm (admin) */
     Page<ReviewResponse> getAllReviewsByProduct(Long productId, Pageable pageable);
 
+    Page<ReviewResponse> getAllReviews(Pageable pageable);
+
     List<ReviewResponse> getMyReviews(String username);
 
     ReviewResponse approveReview(Long reviewId);

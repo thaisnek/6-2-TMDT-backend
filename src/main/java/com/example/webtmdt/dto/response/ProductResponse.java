@@ -20,6 +20,7 @@ public class ProductResponse {
     private String material;
     private BigDecimal basePrice;
     private String status;
+    private Long sold;
 
     // Category info
     private Long categoryId;

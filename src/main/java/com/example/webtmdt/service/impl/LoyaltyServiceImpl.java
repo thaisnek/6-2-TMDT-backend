@@ -35,6 +35,11 @@ public class LoyaltyServiceImpl implements LoyaltyService {
     @Override
     @Transactional
     public void earnPoints(User user, Order order) {
+        if (transactionRepository.existsByOrderIdAndType(order.getId(), LoyaltyTransactionType.EARN)) {
+            log.info("Order {} already earned loyalty points", order.getOrderCode());
+            return;
+        }
+
         LoyaltyPolicy policy = policyRepository.findByEnabledTrue().orElse(null);
         if (policy == null) {
             log.info("Không có chính sách tích điểm nào đang hoạt động");

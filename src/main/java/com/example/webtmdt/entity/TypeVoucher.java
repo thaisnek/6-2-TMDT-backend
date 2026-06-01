@@ -49,7 +49,7 @@ public class TypeVoucher {
 
     // ========== RELATIONSHIPS ==========
 
-    @OneToMany(mappedBy = "typeVoucher", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "typeVoucher")
     @Builder.Default
     private List<Voucher> vouchers = new ArrayList<>();
 }

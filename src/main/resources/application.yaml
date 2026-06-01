@@ -13,6 +13,10 @@ spring:
       ddl-auto: update
     show-sql: true
 
+app:
+  upload:
+    product-image-dir: "C:/ToyImage/Product"
+
 # MoMo Payment Gateway (Sandbox)
 momo:
   partner-code: YOUR_PARTNER_CODE

@@ -3,14 +3,17 @@ package com.example.webtmdt.service.impl;
 import com.example.webtmdt.dto.request.CategoryRequest;
 import com.example.webtmdt.dto.response.CategoryResponse;
 import com.example.webtmdt.entity.Category;
+import com.example.webtmdt.exception.AppException;
 import com.example.webtmdt.exception.ResourceNotFoundException;
 import com.example.webtmdt.mapper.CategoryMapper;
 import com.example.webtmdt.repository.CategoryRepository;
 import com.example.webtmdt.service.CategoryService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -78,7 +81,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional(readOnly = true)
     public List<CategoryResponse> getRootCategories() {
-        return categoryRepository.findByParentIsNullAndActiveTrue().stream()
+        return categoryRepository.findByParentIsNullAndActiveTrueOrderByIdAsc().stream()
                 .map(this::toResponseWithChildren)
                 .collect(Collectors.toList());
     }
@@ -100,8 +103,12 @@ public class CategoryServiceImpl implements CategoryService {
 
         // Update parent
         if (request.getParentId() != null) {
+            if (request.getParentId().equals(id)) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Danh muc khong the la cha cua chinh no");
+            }
             Category parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ResourceNotFoundException("Danh mục cha", "id", request.getParentId()));
+            ensureParentIsNotDescendant(category, parent);
             category.setParent(parent);
         } else {
             category.setParent(null);
@@ -117,7 +124,8 @@ public class CategoryServiceImpl implements CategoryService {
     @Transactional
     public void deleteCategory(Long id) {
         Category category = findCategoryOrThrow(id);
-        categoryRepository.delete(category);
+        deactivateCategoryTree(category);
+        categoryRepository.save(category);
     }
 
     // ==================== HELPER METHODS ====================
@@ -132,16 +140,34 @@ public class CategoryServiceImpl implements CategoryService {
     }
 
     /**
-     * Convert entity → response, bao gồm children (1 cấp).
-     * Dùng CategoryMapper cho mapping cơ bản, bổ sung children thủ công.
+     * Convert entity -> response, including active descendants.
      */
+    private void ensureParentIsNotDescendant(Category category, Category parent) {
+        Category current = parent;
+        while (current != null) {
+            if (current.getId().equals(category.getId())) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Khong the chuyen danh muc vao chinh nhanh con cua no");
+            }
+            current = current.getParent();
+        }
+    }
+
+    private void deactivateCategoryTree(Category category) {
+        category.setActive(false);
+        if (category.getChildren() != null) {
+            category.getChildren().forEach(this::deactivateCategoryTree);
+        }
+    }
+
     private CategoryResponse toResponseWithChildren(Category category) {
         CategoryResponse response = categoryMapper.toResponse(category);
 
-        // Map children (chỉ 1 cấp để tránh đệ quy vô hạn)
+        // Map active children recursively so FE can render the category tree.
         if (category.getChildren() != null && !category.getChildren().isEmpty()) {
             List<CategoryResponse> childResponses = category.getChildren().stream()
-                    .map(categoryMapper::toResponse)
+                    .filter(child -> child.getActive() != Boolean.FALSE)
+                    .sorted(Comparator.comparing(Category::getId))
+                    .map(this::toResponseWithChildren)
                     .collect(Collectors.toList());
             response.setChildren(childResponses);
         }

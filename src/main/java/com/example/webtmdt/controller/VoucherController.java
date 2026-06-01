@@ -15,7 +15,13 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -25,30 +31,20 @@ public class VoucherController {
 
     private final VoucherService voucherService;
 
-    // ==================== PUBLIC / CUSTOMER ====================
-
-    @GetMapping("/api/vouchers/available")
-    public ResponseEntity<ApiResponse<List<VoucherResponse>>> getAvailableVouchers() {
-        List<VoucherResponse> vouchers = voucherService.getAvailableVouchers();
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách voucher thành công!", vouchers));
-    }
-
-    // ==================== ADMIN ====================
-
     @PostMapping("/api/admin/vouchers/types")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<TypeVoucherResponse>> createTypeVoucher(
             @Valid @RequestBody TypeVoucherRequest request) {
         TypeVoucherResponse type = voucherService.createTypeVoucher(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Tạo loại voucher thành công!", type));
+                .body(ApiResponse.success("Tao loai voucher thanh cong!", type));
     }
 
     @GetMapping("/api/admin/vouchers/types")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<TypeVoucherResponse>>> getAllTypeVouchers() {
         List<TypeVoucherResponse> types = voucherService.getAllTypeVouchers();
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách loại voucher thành công!", types));
+        return ResponseEntity.ok(ApiResponse.success("Lay danh sach loai voucher thanh cong!", types));
     }
 
     @PostMapping("/api/admin/vouchers")
@@ -57,7 +53,7 @@ public class VoucherController {
             @Valid @RequestBody VoucherRequest request) {
         VoucherResponse voucher = voucherService.createVoucher(request);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Tạo voucher thành công!", voucher));
+                .body(ApiResponse.success("Tao voucher thanh cong!", voucher));
     }
 
     @GetMapping("/api/admin/vouchers")
@@ -67,13 +63,13 @@ public class VoucherController {
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<VoucherResponse> vouchers = voucherService.getAllVouchers(pageable);
-        return ResponseEntity.ok(ApiResponse.success("Lấy danh sách voucher thành công!", vouchers));
+        return ResponseEntity.ok(ApiResponse.success("Lay danh sach voucher thanh cong!", vouchers));
     }
 
     @DeleteMapping("/api/admin/vouchers/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteVoucher(@PathVariable Long id) {
         voucherService.deleteVoucher(id);
-        return ResponseEntity.ok(ApiResponse.success("Xóa voucher thành công!", null));
+        return ResponseEntity.ok(ApiResponse.success("Xoa voucher thanh cong!", null));
     }
 }

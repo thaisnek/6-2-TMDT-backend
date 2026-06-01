@@ -25,7 +25,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -91,18 +90,10 @@ public class VoucherServiceImpl implements VoucherService {
     public void deleteVoucher(Long id) {
         Voucher voucher = voucherRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Voucher", "id", id));
+        if (voucher.getUsedQuantity() != null && voucher.getUsedQuantity() > 0) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Khong the xoa voucher da duoc su dung");
+        }
         voucherRepository.delete(voucher);
-    }
-
-    // ==================== CUSTOMER ====================
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<VoucherResponse> getAvailableVouchers() {
-        List<Voucher> vouchers = voucherRepository.findAvailableVouchers(LocalDateTime.now());
-        return vouchers.stream()
-                .map(this::toVoucherResponse)
-                .collect(Collectors.toList());
     }
 
     // ==================== INTERNAL ====================

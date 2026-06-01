@@ -3,14 +3,22 @@ package com.example.webtmdt.service.impl;
 import com.example.webtmdt.configuration.MomoConfig;
 import com.example.webtmdt.dto.response.PaymentResponse;
 import com.example.webtmdt.entity.Order;
+import com.example.webtmdt.entity.OrderItem;
 import com.example.webtmdt.entity.Payment;
+import com.example.webtmdt.entity.ProductVariant;
 import com.example.webtmdt.enums.PaymentMethod;
 import com.example.webtmdt.enums.PaymentStatus;
+import com.example.webtmdt.enums.OrderStatus;
+import com.example.webtmdt.enums.ShipmentStatus;
 import com.example.webtmdt.exception.AppException;
 import com.example.webtmdt.exception.ResourceNotFoundException;
 import com.example.webtmdt.mapper.PaymentMapper;
 import com.example.webtmdt.repository.OrderRepository;
 import com.example.webtmdt.repository.PaymentRepository;
+import com.example.webtmdt.repository.ProductVariantRepository;
+import com.example.webtmdt.repository.ShipmentRepository;
+import com.example.webtmdt.repository.VoucherRepository;
+import com.example.webtmdt.repository.VoucherUsedRepository;
 import com.example.webtmdt.service.PaymentService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -31,6 +40,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +51,10 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
+    private final ProductVariantRepository variantRepository;
+    private final ShipmentRepository shipmentRepository;
+    private final VoucherRepository voucherRepository;
+    private final VoucherUsedRepository voucherUsedRepository;
     private final PaymentMapper paymentMapper;
     private final MomoConfig momoConfig;
     private final ObjectMapper objectMapper;
@@ -105,8 +119,9 @@ public class PaymentServiceImpl implements PaymentService {
             if (resultCode == 0) {
                 return responseNode.get("payUrl").asText();
             } else {
-                log.warn("MoMo sandbox unavailable (resultCode={}). Returning mock URL for local testing.", resultCode);
-                return "https://test-payment.momo.vn/mock?orderId=" + orderId + "&amount=" + amount;
+                String message = responseNode.has("message") ? responseNode.get("message").asText() : "MoMo resultCode: " + resultCode;
+                log.warn("MoMo create payment failed for order {}: {}", orderId, message);
+                throw new AppException(HttpStatus.BAD_REQUEST, "Khong tao duoc thanh toan MoMo: " + message);
             }
         } catch (AppException e) {
             throw e;
@@ -120,9 +135,15 @@ public class PaymentServiceImpl implements PaymentService {
     @Transactional
     public void handleMomoCallback(Map<String, String> params) {
         try {
+            if (!isValidMomoSignature(params)) {
+                log.warn("Rejected MoMo callback with invalid signature for orderId={}", params.get("orderId"));
+                return;
+            }
+
             String orderId = params.get("orderId");
             int resultCode = Integer.parseInt(params.get("resultCode"));
             String transId = params.get("transId");
+            BigDecimal amount = new BigDecimal(params.get("amount"));
 
             Order order = orderRepository.findByOrderCode(orderId)
                     .orElseThrow(() -> new ResourceNotFoundException("Đơn hàng", "orderCode", orderId));
@@ -131,6 +152,19 @@ public class PaymentServiceImpl implements PaymentService {
                     .orElseThrow(() -> new ResourceNotFoundException("Thanh toán", "orderId", order.getId()));
 
             if (resultCode == 0) {
+                if (payment.getPaymentStatus() == PaymentStatus.PAID) {
+                    log.info("Ignoring duplicate paid MoMo callback for order {}", orderId);
+                    return;
+                }
+                if (payment.getPaymentStatus() == PaymentStatus.CANCELLED || payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
+                    log.warn("Ignoring MoMo paid callback for closed order {}", orderId);
+                    return;
+                }
+                if (amount.compareTo(order.getTotalAmount()) != 0) {
+                    log.warn("Rejected MoMo callback for order {} because amount {} != {}", orderId, amount, order.getTotalAmount());
+                    return;
+                }
+
                 // Thanh toán thành công
                 payment.setPaymentStatus(PaymentStatus.PAID);
                 payment.setPaidAt(LocalDateTime.now());
@@ -138,10 +172,19 @@ public class PaymentServiceImpl implements PaymentService {
                 payment.setProviderName("MOMO");
                 order.setPaymentStatus(PaymentStatus.PAID);
             } else {
+                if (payment.getPaymentStatus() == PaymentStatus.PAID) {
+                    log.info("Ignoring failed MoMo callback for already paid order {}", orderId);
+                    return;
+                }
+                if (payment.getPaymentStatus() == PaymentStatus.CANCELLED || payment.getPaymentStatus() == PaymentStatus.REFUNDED) {
+                    log.info("Ignoring failed MoMo callback for closed order {}", orderId);
+                    return;
+                }
                 // Thanh toán thất bại
                 payment.setPaymentStatus(PaymentStatus.FAILED);
                 payment.setFailureReason("MoMo resultCode: " + resultCode);
                 order.setPaymentStatus(PaymentStatus.FAILED);
+                releaseOrderReservation(order, "MoMo payment failed: " + resultCode);
             }
 
             paymentRepository.save(payment);
@@ -167,6 +210,10 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (payment.getPaymentStatus() == PaymentStatus.PAID) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Đơn hàng này đã được xác nhận thanh toán");
+        }
+
+        if (payment.getPaymentStatus() != PaymentStatus.PENDING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Trang thai thanh toan khong cho phep xac nhan COD");
         }
 
         payment.setPaymentStatus(PaymentStatus.PAID);
@@ -205,6 +252,69 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     // ==================== HELPER ====================
+
+    private boolean isValidMomoSignature(Map<String, String> params) throws Exception {
+        String providedSignature = params.get("signature");
+        if (providedSignature == null || providedSignature.isBlank()) {
+            return false;
+        }
+
+        List<String> keys = List.of(
+                "accessKey",
+                "amount",
+                "extraData",
+                "message",
+                "orderId",
+                "orderInfo",
+                "orderType",
+                "partnerCode",
+                "payType",
+                "requestId",
+                "responseTime",
+                "resultCode",
+                "transId"
+        );
+
+        StringBuilder rawSignature = new StringBuilder();
+        for (String key : keys) {
+            if (rawSignature.length() > 0) {
+                rawSignature.append('&');
+            }
+            String value = "accessKey".equals(key) ? momoConfig.getAccessKey() : params.getOrDefault(key, "");
+            rawSignature.append(key).append('=').append(value);
+        }
+
+        String expectedSignature = hmacSHA256(momoConfig.getSecretKey(), rawSignature.toString());
+        return expectedSignature.equalsIgnoreCase(providedSignature);
+    }
+
+    private void releaseOrderReservation(Order order, String reason) {
+        if (order.getOrderStatus() == OrderStatus.CANCELLED
+                || order.getOrderStatus() == OrderStatus.COMPLETED
+                || order.getOrderStatus() == OrderStatus.DELIVERED) {
+            return;
+        }
+
+        for (OrderItem item : order.getOrderItems()) {
+            ProductVariant variant = item.getVariant();
+            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+            variantRepository.save(variant);
+        }
+
+        if (order.getVoucher() != null) {
+            voucherRepository.decrementUsedQuantity(order.getVoucher().getId());
+            voucherUsedRepository.deleteByUserIdAndVoucherId(order.getCustomer().getId(), order.getVoucher().getId());
+        }
+
+        shipmentRepository.findByOrderId(order.getId()).ifPresent(shipment -> {
+            shipment.setShipmentStatus(ShipmentStatus.FAILED);
+            shipment.setFailureReason(reason);
+            shipmentRepository.save(shipment);
+        });
+
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setShippingStatus(ShipmentStatus.FAILED);
+    }
 
     private String hmacSHA256(String key, String data) throws Exception {
         Mac mac = Mac.getInstance("HmacSHA256");

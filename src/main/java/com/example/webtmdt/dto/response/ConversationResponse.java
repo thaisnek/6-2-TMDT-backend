@@ -15,6 +15,7 @@ public class ConversationResponse {
     private Long id;
     private Long otherUserId;
     private String otherUserName;
+    private String otherFullName;
     private String lastMessage;
     private LocalDateTime lastMessageAt;
     private LocalDateTime createdAt;

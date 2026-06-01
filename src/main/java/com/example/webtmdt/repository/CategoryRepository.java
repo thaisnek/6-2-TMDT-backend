@@ -9,7 +9,7 @@ import java.util.List;
 @Repository
 public interface CategoryRepository extends JpaRepository<Category, Long> {
 
-    List<Category> findByParentIsNullAndActiveTrue();
+    List<Category> findByParentIsNullAndActiveTrueOrderByIdAsc();
 
     List<Category> findByParentIdAndActiveTrue(Long parentId);
 

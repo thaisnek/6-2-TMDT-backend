@@ -2,7 +2,9 @@ package com.example.webtmdt.controller;
 
 import com.example.webtmdt.dto.request.ProductRequest;
 import com.example.webtmdt.dto.response.ApiResponse;
+import com.example.webtmdt.dto.response.ImageUploadResponse;
 import com.example.webtmdt.dto.response.ProductResponse;
+import com.example.webtmdt.service.ProductImageStorageService;
 import com.example.webtmdt.service.ProductService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -11,9 +13,11 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 
@@ -23,6 +27,7 @@ import java.math.BigDecimal;
 public class ProductController {
 
     private final ProductService productService;
+    private final ProductImageStorageService productImageStorageService;
 
     // ==================== PUBLIC ENDPOINTS ====================
 
@@ -116,6 +121,19 @@ public class ProductController {
     }
 
     // ==================== ADMIN ENDPOINTS ====================
+
+    /**
+     * Upload ảnh sản phẩm (chỉ ADMIN)
+     * POST /api/products/images/upload
+     */
+    @PostMapping(value = "/images/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<ImageUploadResponse>> uploadProductImage(
+            @RequestParam("file") MultipartFile file) {
+        ImageUploadResponse image = productImageStorageService.store(file);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Upload ảnh sản phẩm thành công!", image));
+    }
 
     /**
      * Tạo sản phẩm mới (chỉ ADMIN)

@@ -4,6 +4,7 @@ import com.example.webtmdt.dto.request.CreateOrderRequest;
 import com.example.webtmdt.dto.request.UpdateOrderStatusRequest;
 import com.example.webtmdt.dto.response.ApiResponse;
 import com.example.webtmdt.dto.response.OrderResponse;
+import com.example.webtmdt.enums.OrderStatus;
 import com.example.webtmdt.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -80,10 +81,11 @@ public class OrderController {
     @GetMapping("/api/admin/orders")
     @PreAuthorize("hasAnyRole('ADMIN', 'SALES_STAFF')")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(
+            @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<OrderResponse> orders = orderService.getAllOrders(pageable);
+        Page<OrderResponse> orders = orderService.getAllOrders(status, pageable);
         return ResponseEntity.ok(ApiResponse.success("Lấy tất cả đơn hàng thành công!", orders));
     }
 
@@ -97,9 +99,10 @@ public class OrderController {
     @PutMapping("/api/admin/orders/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'SALES_STAFF')")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
+            @AuthenticationPrincipal UserDetails userDetails,
             @PathVariable Long id,
             @Valid @RequestBody UpdateOrderStatusRequest request) {
-        OrderResponse order = orderService.updateOrderStatus(id, request);
+        OrderResponse order = orderService.updateOrderStatus(userDetails.getUsername(), id, request);
         return ResponseEntity.ok(ApiResponse.success("Cập nhật trạng thái đơn hàng thành công!", order));
     }
 }

@@ -228,16 +228,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Hoàn stock
-        for (OrderItem item : order.getOrderItems()) {
-            ProductVariant variant = item.getVariant();
-            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-            variantRepository.save(variant);
-        }
-
-        order.setOrderStatus(OrderStatus.CANCELLED);
-        order.setCancelReason(reason);
-        order.setPaymentStatus(PaymentStatus.REFUNDED);
-        order.setShippingStatus(ShipmentStatus.FAILED);
+        cancelOrderInternal(order, reason == null || reason.isBlank() ? "Khach hang huy don" : reason);
 
         order = orderRepository.save(order);
         return toOrderResponse(order);
@@ -260,8 +251,7 @@ public class OrderServiceImpl implements OrderService {
             throw new AppException(HttpStatus.BAD_REQUEST, "Chỉ có thể bấm Đã nhận được hàng khi đơn hàng ở trạng thái Đã giao (DELIVERED)");
         }
 
-        order.setOrderStatus(OrderStatus.COMPLETED);
-        loyaltyService.earnPoints(user, order);
+        completeOrderInternal(order);
 
         order = orderRepository.save(order);
         return toOrderResponse(order);
@@ -271,8 +261,11 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        return orderRepository.findAll(pageable).map(this::toOrderResponse);
+    public Page<OrderResponse> getAllOrders(OrderStatus status, Pageable pageable) {
+        Page<Order> orders = status == null
+                ? orderRepository.findAll(pageable)
+                : orderRepository.findByOrderStatus(status, pageable);
+        return orders.map(this::toOrderResponse);
     }
 
     @Override
@@ -285,38 +278,156 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse updateOrderStatus(Long orderId, UpdateOrderStatusRequest request) {
+    public OrderResponse updateOrderStatus(String username, Long orderId, UpdateOrderStatusRequest request) {
+        User actor = findUserOrThrow(username);
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Đơn hàng", "id", orderId));
 
         OrderStatus newStatus = request.getOrderStatus();
 
-        if (newStatus == OrderStatus.CANCELLED) {
-            if (request.getCancelReason() == null || request.getCancelReason().isBlank()) {
-                throw new AppException(HttpStatus.BAD_REQUEST, "Vui lòng cung cấp lý do hủy đơn");
-            }
-            // Hoàn stock
-            for (OrderItem item : order.getOrderItems()) {
-                ProductVariant variant = item.getVariant();
-                variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
-                variantRepository.save(variant);
-            }
-            order.setCancelReason(request.getCancelReason());
-            order.setPaymentStatus(PaymentStatus.REFUNDED);
-            order.setShippingStatus(ShipmentStatus.FAILED);
+        if (actor.getRole() == UserRole.SALES_STAFF) {
+            return updateOrderStatusAsSales(order, newStatus, request.getCancelReason());
         }
 
-        // Khi COMPLETED → tích điểm
-        if (newStatus == OrderStatus.COMPLETED && order.getOrderStatus() != OrderStatus.COMPLETED) {
-            loyaltyService.earnPoints(order.getCustomer(), order);
+        if (actor.getRole() != UserRole.ADMIN) {
+            throw new AppException(HttpStatus.FORBIDDEN, "No permission to update this order");
         }
 
-        order.setOrderStatus(newStatus);
+        applyAdminOrderStatus(order, newStatus, request.getCancelReason());
         order = orderRepository.save(order);
         return toOrderResponse(order);
     }
 
     // ==================== HELPER ====================
+
+    private void applyAdminOrderStatus(Order order, OrderStatus newStatus, String cancelReason) {
+        if (newStatus == order.getOrderStatus()) {
+            return;
+        }
+
+        if (newStatus == OrderStatus.CONFIRMED) {
+            confirmOrderInternal(order);
+            return;
+        }
+
+        if (newStatus == OrderStatus.CANCELLED) {
+            if (cancelReason == null || cancelReason.isBlank()) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Vui long cung cap ly do huy don");
+            }
+            if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.CONFIRMED) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Chi co the huy don o trang thai cho xac nhan hoac da xac nhan");
+            }
+            cancelOrderInternal(order, cancelReason);
+            return;
+        }
+
+        if (newStatus == OrderStatus.COMPLETED) {
+            completeOrderInternal(order);
+            return;
+        }
+
+        throw new AppException(HttpStatus.BAD_REQUEST, "Trang thai nay phai duoc cap nhat tu man hinh giao hang");
+    }
+
+    private OrderResponse updateOrderStatusAsSales(Order order, OrderStatus newStatus, String cancelReason) {
+        if (newStatus == OrderStatus.CONFIRMED) {
+            confirmOrderInternal(order);
+            return toOrderResponse(orderRepository.save(order));
+        }
+
+        if (newStatus == OrderStatus.CANCELLED) {
+            if (order.getOrderStatus() != OrderStatus.PENDING && order.getOrderStatus() != OrderStatus.CONFIRMED) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Sales can only cancel pending or confirmed orders");
+            }
+            if (cancelReason == null || cancelReason.isBlank()) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Cancel reason is required");
+            }
+            cancelOrderInternal(order, cancelReason);
+            return toOrderResponse(orderRepository.save(order));
+        }
+
+        throw new AppException(HttpStatus.FORBIDDEN, "Sales can only confirm or cancel orders");
+    }
+
+    private void confirmOrderInternal(Order order) {
+        if (order.getOrderStatus() != OrderStatus.PENDING) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chi co the xac nhan don dang cho xac nhan");
+        }
+        ensurePaymentAllowsOrderConfirmation(order);
+        order.setOrderStatus(OrderStatus.CONFIRMED);
+    }
+
+    private void completeOrderInternal(Order order) {
+        if (order.getOrderStatus() != OrderStatus.DELIVERED) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Chi co the hoan thanh don da giao");
+        }
+        order.setOrderStatus(OrderStatus.COMPLETED);
+        loyaltyService.earnPoints(order.getCustomer(), order);
+    }
+
+    private void cancelOrderInternal(Order order, String reason) {
+        restoreStock(order);
+        releaseVoucher(order);
+        closePaymentForCancellation(order, reason);
+        markShipmentFailed(order, "Order cancelled: " + reason);
+
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        order.setCancelReason(reason);
+        order.setShippingStatus(ShipmentStatus.FAILED);
+    }
+
+    private void ensurePaymentAllowsOrderConfirmation(Order order) {
+        Payment payment = paymentRepository.findByOrderId(order.getId())
+                .orElseThrow(() -> new ResourceNotFoundException("Thanh toan", "orderId", order.getId()));
+
+        if (payment.getPaymentMethod() == PaymentMethod.COD) {
+            if (payment.getPaymentStatus() == PaymentStatus.CANCELLED || payment.getPaymentStatus() == PaymentStatus.FAILED) {
+                throw new AppException(HttpStatus.BAD_REQUEST, "Thanh toan COD cua don nay khong con hop le");
+            }
+            return;
+        }
+
+        if (payment.getPaymentStatus() != PaymentStatus.PAID) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Don thanh toan online phai thanh toan xong moi duoc xac nhan");
+        }
+    }
+
+    private void closePaymentForCancellation(Order order, String reason) {
+        paymentRepository.findByOrderId(order.getId()).ifPresent(payment -> {
+            PaymentStatus closedStatus = payment.getPaymentStatus() == PaymentStatus.PAID
+                    ? PaymentStatus.REFUNDED
+                    : PaymentStatus.CANCELLED;
+            payment.setPaymentStatus(closedStatus);
+            payment.setFailureReason(reason);
+            paymentRepository.save(payment);
+            order.setPaymentStatus(closedStatus);
+        });
+    }
+
+    private void releaseVoucher(Order order) {
+        if (order.getVoucher() == null) {
+            return;
+        }
+
+        voucherRepository.decrementUsedQuantity(order.getVoucher().getId());
+        voucherUsedRepository.deleteByUserIdAndVoucherId(order.getCustomer().getId(), order.getVoucher().getId());
+    }
+
+    private void markShipmentFailed(Order order, String reason) {
+        shipmentRepository.findByOrderId(order.getId()).ifPresent(shipment -> {
+            shipment.setShipmentStatus(ShipmentStatus.FAILED);
+            shipment.setFailureReason(reason);
+            shipmentRepository.save(shipment);
+        });
+    }
+
+    private void restoreStock(Order order) {
+        for (OrderItem item : order.getOrderItems()) {
+            ProductVariant variant = item.getVariant();
+            variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+            variantRepository.save(variant);
+        }
+    }
 
     private User findUserOrThrow(String username) {
         return userRepository.findByUserName(username)
@@ -331,6 +442,9 @@ public class OrderServiceImpl implements OrderService {
 
     private OrderResponse toOrderResponse(Order order) {
         OrderResponse response = orderMapper.toResponse(order);
+        if (order.getShippingStatus() == ShipmentStatus.FAILED && order.getOrderStatus() == OrderStatus.SHIPPING) {
+            response.setOrderStatus(OrderStatus.CONFIRMED.name());
+        }
 
         // Map items với imageUrl
         List<OrderItemResponse> itemResponses = order.getOrderItems().stream()

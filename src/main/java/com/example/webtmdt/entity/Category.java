@@ -32,7 +32,7 @@ public class Category {
     @JoinColumn(name = "parent_id")
     private Category parent;
 
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "parent")
     @Builder.Default
     private List<Category> children = new ArrayList<>();
 
@@ -49,7 +49,7 @@ public class Category {
 
     // ========== RELATIONSHIPS ==========
 
-    @OneToMany(mappedBy = "category", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "category")
     @Builder.Default
     private List<Product> products = new ArrayList<>();
 }

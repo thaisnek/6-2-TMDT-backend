@@ -20,6 +20,7 @@ public interface OrderMapper {
     OrderResponse toResponse(Order order);
 
     @Mapping(source = "variant.id", target = "variantId")
+    @Mapping(source = "variant.product.id", target = "productId")
     @Mapping(target = "imageUrl", ignore = true)     // tra cứu DB
     OrderItemResponse toItemResponse(OrderItem orderItem);
 
